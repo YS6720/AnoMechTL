@@ -1,0 +1,176 @@
+using System;
+using AnoMech.Core.Game;
+using AnoMech.Core.Game.Party;
+using AnoMech.Core.Native;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
+using FFXIVClientStructs.FFXIV.Client.Game.Object;
+
+namespace AnoMech.Core.SimObjects;
+
+public sealed unsafe class SimStatus : ISimObject
+{
+    private readonly SimCharacter target;
+    private GameObjectId sourceObject;
+    private float duration;
+    private float elapsed;
+    // TC recording 20260911-200023-t968: Passage effect at 77.270,
+    // wing VFX at 77.895 (28 activations, median 0.626s). Keep the managed
+    // protection/cancellation immediate, but do not replace the startup with
+    // the status-owned native loop. Remaining time also ages late peer snapshots.
+    private const float PassageNativeOnsetRemaining = 18f - 0.625f;
+    private float nativeStartDelay;
+
+    public ushort StatusId { get; }
+    public PartyRole? SourceRole { get; }
+    internal GameObjectId SourceObject => sourceObject;
+    public float? NativeRemainingOverride { get; private set; }
+    public bool IsActive { get; private set; }
+    public ushort Stacks { get; private set; }
+    // 上游 1646a70：新狀態先不寫進原生狀態列，等 Reveal（EnemyAction 的狀態在 ActionEffect 那刻才顯示）。
+    public bool Hidden { get; private set; }
+    public float RemainingTime => duration <= 0f ? 0f : MathF.Max(0f, duration - elapsed);
+
+    internal SimStatus(
+        SimCharacter target,
+        ushort statusId,
+        float duration,
+        ushort stacks,
+        PartyRole? sourceRole = null,
+        GameObjectId sourceObject = default,
+        float? nativeRemainingOverride = null,
+        bool hidden = false)
+    {
+        this.target = target;
+        this.duration = MathF.Max(0f, duration);
+        this.sourceObject = sourceObject;
+        StatusId = statusId;
+        SourceRole = sourceRole;
+        NativeRemainingOverride = nativeRemainingOverride;
+        IsActive = true;
+        Stacks = stacks;
+        Hidden = hidden;
+        if (statusId == Combat.Jobs.Paladin.PassageOfArms && stacks != 0)
+            nativeStartDelay = MathF.Max(0f, RemainingTime - PassageNativeOnsetRemaining);
+        if (!hidden && nativeStartDelay <= 0f)
+            StartNative();
+    }
+
+    // 隱藏中的狀態此刻寫進原生狀態列；已顯示或已結束就不動。
+    internal void Reveal()
+    {
+        if (!IsActive || !Hidden) return;
+        Hidden = false;
+        if (nativeStartDelay <= 0f) StartNative();
+    }
+
+    private void StartNative()
+        => Statuses.AddStatusInit(
+            (Character*)target.BattleCharaPtr,
+            StatusId,
+            Stacks,
+            refreshDuration: NativeRemainingOverride ?? RemainingTime,
+            sourceObject: sourceObject);
+
+    public void Reapply(float duration, int stacks)
+    {
+        if (duration > 0f)
+        {
+            this.duration = duration;
+            elapsed = 0f;
+        }
+        // Negative stacks decrement; clamp to 0 (callers handle removal at 0).
+        Stacks = (ushort)Math.Max(0, Stacks + stacks);
+    }
+
+    // 維護者-snapshot refresh (peer side). Existence, countdown, raw param and
+    // native convention all come from the owner, so pin them in place —
+    // Statuses.Apply refreshes the exact source slot without the status-init
+    // gain path, which at 20Hz snapshot rate would replay the gain VFX forever.
+    internal void ApplyNetworkState(
+        float remaining,
+        ushort param,
+        float? nativeRemainingOverride = null,
+        GameObjectId sourceObject = default)
+    {
+        if (!IsActive) return;
+        var previousSourceObject = this.sourceObject;
+        duration = MathF.Max(0f, remaining);
+        elapsed = 0f;
+        NativeRemainingOverride = nativeRemainingOverride;
+        Stacks = param;
+        if (nativeStartDelay > 0f)
+        {
+            this.sourceObject = sourceObject;
+            nativeStartDelay = MathF.Min(nativeStartDelay,
+                MathF.Max(0f, RemainingTime - PassageNativeOnsetRemaining));
+            if (nativeStartDelay <= 0f)
+                StartNative();
+            return;
+        }
+        Statuses.Apply(
+            (Character*)target.BattleCharaPtr,
+            StatusId,
+            NativeRemainingOverride ?? RemainingTime,
+            param,
+            sourceObject);
+        this.sourceObject = sourceObject;
+        if (previousSourceObject != sourceObject)
+            Statuses.Remove((Character*)target.BattleCharaPtr, StatusId, previousSourceObject);
+    }
+
+    public void Tick(float deltaSeconds)
+    {
+        if (!IsActive) return;
+
+        if (duration > 0f)
+        {
+            elapsed = MathF.Min(duration, elapsed + deltaSeconds);
+            if (elapsed >= duration)
+            {
+                End(StatusLossReason.Expired);
+                return;
+            }
+        }
+        if (Hidden) return;
+        if (nativeStartDelay > 0f)
+        {
+            nativeStartDelay = MathF.Max(0f, nativeStartDelay - deltaSeconds);
+            if (nativeStartDelay > 0f)
+                return;
+            StartNative();
+        }
+
+        // 原生槽不見了＝遊戲自己取消了這個狀態（武裝戌守移動即取消、被打斷、玩家手動解除、
+        // 開始練習時的 ResetPlayerStatuses…）。遊戲對它自己的狀態是權威，模擬層只是鏡像：
+        // 這時要跟著結束，不能把它寫回去。少了這一步，維護者 2026-09-15 實機看到的是
+        // 「移動取消後打一個 GCD，翅膀又出現」——鏡像拿自己的計時器當唯一真相，反覆重建
+        // 一個遊戲已經判定結束的狀態。
+        if (!Statuses.Has((Character*)target.BattleCharaPtr, StatusId, sourceObject))
+        {
+            IsActive = false;   // 槽位已空，不必再 Remove
+            RaiseLost(StatusLossReason.Removed);
+            return;
+        }
+
+        Statuses.Apply(
+            (Character*)target.BattleCharaPtr,
+            StatusId,
+            NativeRemainingOverride ?? RemainingTime,
+            Stacks,
+            sourceObject);
+    }
+
+    public void Despawn() => End(StatusLossReason.Removed);
+
+    private void End(StatusLossReason reason)
+    {
+        if (!IsActive) return;
+        Statuses.Remove((Character*)target.BattleCharaPtr, StatusId, sourceObject);
+        IsActive = false;
+        RaiseLost(reason);
+    }
+
+    // 上游 1646a70 SimStatus.End：到期＝Expired、被移除＝Removed；沒有監聽者（拆場、成員端）時不送。
+    private void RaiseLost(StatusLossReason reason)
+        => target.SimEvents?.Raise(new StatusLost(target, StatusId, Stacks, reason));
+}

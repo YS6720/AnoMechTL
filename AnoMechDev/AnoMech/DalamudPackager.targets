@@ -1,0 +1,21 @@
+<Project>
+  <!-- DalamudPackager opens its manifest exclusively. Give each edition and
+       configuration its own copy; never let concurrent builds share that handle. -->
+  <Target Name="PackageAnoMechIsolated" AfterTargets="Build">
+    <PropertyGroup>
+      <_AnoMechPackagerProjectDir>$(AnoMechIntermediatePath)packager\</_AnoMechPackagerProjectDir>
+      <_AnoMechMakeZip Condition="'$(Configuration)' == 'Release'">true</_AnoMechMakeZip>
+      <_AnoMechMakeZip Condition="'$(Configuration)' != 'Release'">false</_AnoMechMakeZip>
+      <!-- 打包工具固定讀 <AssemblyName>.json；各伺服器的 manifest 原檔名不同，複製時改名。 -->
+      <_AnoMechManifestSource Condition="'$(AnoMechServer)' == 'TC'">$(MSBuildProjectDirectory)\AnoMech.json</_AnoMechManifestSource>
+      <_AnoMechManifestSource Condition="'$(AnoMechServer)' == 'Global'">$(MSBuildProjectDirectory)\AnoMech.Global.json</_AnoMechManifestSource>
+    </PropertyGroup>
+    <MakeDir Directories="$(_AnoMechPackagerProjectDir)" />
+    <Copy SourceFiles="$(_AnoMechManifestSource)"
+          DestinationFiles="$(_AnoMechPackagerProjectDir)$(AssemblyName).json" />
+    <DalamudPackager ProjectDir="$(_AnoMechPackagerProjectDir)"
+                    OutputPath="$(OutputPath)"
+                    AssemblyName="$(AssemblyName)"
+                    MakeZip="$(_AnoMechMakeZip)" />
+  </Target>
+</Project>
