@@ -4,7 +4,7 @@ FFXIV 國際服版的 **AnoMech** 移植（介面為繁體中文）。在旅館�
 
 > 非官方專案，與 SQUARE ENIX 無關。使用第三方插件的風險由使用者自行承擔。
 >
-> 本 repo 只發佈國際服版；台服請用 [AnoMechTC](https://github.com/YS6720/AnoMechTC)。
+> 此源提供國際服 AnoMech (API15) 與台服藏寶圖隊伍 (API13)。台服版 AnoMech 請用 [AnoMechTC](https://github.com/YS6720/AnoMechTC)。
 
 ## 功能
 
@@ -26,7 +26,7 @@ FFXIV 國際服版的 **AnoMech** 移植（介面為繁體中文）。在旅館�
    https://raw.githubusercontent.com/YS6720/AnoMechTL/main/repo-global.json
    ```
 
-3. `/xlplugins` → 搜尋 **AnoMech**（顯示為「AnoMech（國際服）」）→ 安裝
+3. `/xlplugins` → 選「AnoMech（國際服） (API15)」或「藏寶圖隊伍 (API13)」→ 安裝
 
 更新由 Dalamud 自動提示。
 

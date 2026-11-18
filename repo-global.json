@@ -1,7 +1,7 @@
 [
   {
     "Author": "Anomek",
-    "Name": "AnoMech（國際服）",
+    "Name": "AnoMech（國際服） (API15)",
     "InternalName": "AnoMechIntl",
     "AssemblyVersion": "0.20.8.1",
     "Description": "Spawns fake party members and bosses client-side so you can practice raid mechanics without a full party.",
@@ -26,9 +26,24 @@
     "IconUrl": "https://raw.githubusercontent.com/anomek/AnoMech/master/images/icon.png",
     "Punchline": "Another FFXIV mechanics simulator. Go to an inn and start practice.",
     "AcceptsFeedback": true,
-    "DownloadLinkInstall": "https://github.com/YS6720/AnoMechTL/releases/latest/download/AnoMechIntl-0.20.8.1.zip",
-    "DownloadLinkUpdate": "https://github.com/YS6720/AnoMechTL/releases/latest/download/AnoMechIntl-0.20.8.1.zip",
-    "DownloadLinkTesting": "https://github.com/YS6720/AnoMechTL/releases/latest/download/AnoMechIntl-0.20.8.1.zip",
+    "DownloadLinkInstall": "https://github.com/YS6720/AnoMechTL/releases/download/v0.20.8.1/AnoMechIntl-0.20.8.1-API15.zip",
+    "DownloadLinkUpdate": "https://github.com/YS6720/AnoMechTL/releases/download/v0.20.8.1/AnoMechIntl-0.20.8.1-API15.zip",
+    "DownloadLinkTesting": "https://github.com/YS6720/AnoMechTL/releases/download/v0.20.8.1/AnoMechIntl-0.20.8.1-API15.zip",
+    "IsHide": false
+  },
+  {
+    "Author": "YS6720",
+    "Name": "藏寶圖隊伍 (API13)",
+    "InternalName": "TreasureParty",
+    "AssemblyVersion": "0.3.1.5",
+    "Description": "本機解讀藏寶圖、發送旗標，與網站首頁使用同一個六碼房間共享路線。原生暫時標記會重設其他插件同層標記。",
+    "Punchline": "在插件內整理與共享藏寶圖點位",
+    "ApplicableVersion": "any",
+    "DalamudApiLevel": 13,
+    "Tags": ["treasure", "map", "party"],
+    "DownloadLinkInstall": "https://github.com/YS6720/AnoMechTL/releases/download/treasureparty-v0.3.1.5/TreasureParty-0.3.1.5.zip",
+    "DownloadLinkUpdate": "https://github.com/YS6720/AnoMechTL/releases/download/treasureparty-v0.3.1.5/TreasureParty-0.3.1.5.zip",
+    "DownloadLinkTesting": "https://github.com/YS6720/AnoMechTL/releases/download/treasureparty-v0.3.1.5/TreasureParty-0.3.1.5.zip",
     "IsHide": false
   }
 ]
