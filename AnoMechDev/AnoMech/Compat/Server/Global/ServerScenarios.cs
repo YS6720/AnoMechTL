@@ -3,6 +3,7 @@ using AnoMech.Scenarios;
 using AnoMech.Scenarios.Umad;
 using AnoMech.Scenarios.Umad.P1TeleTrouncing;
 using AnoMech.Scenarios.Umad.P2Forsaken;
+using AnoMech.Scenarios.Umad.P2Trine;
 using AnoMech.Scenarios.Umad.P3BlackHole;
 using AnoMech.Scenarios.Umad.P3LimitCut;
 using AnoMech.Scenarios.Umad.P4KefkaSays;
@@ -23,6 +24,7 @@ internal static class ServerScenarios
     [
         new UmadP1TeleTrouncingScenario(),
         new UmadP2ForsakenScenario(),
+        new UmadP2TrineScenario(), // 我方：P2 收尾異三角獨立場景（Owner 11-25）
         new UmadP3LimitCutScenario(),
         new UmadP3BlackHoleScenario(),
         new UmadP4KefkaSaysScenario(),

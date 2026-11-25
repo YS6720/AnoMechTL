@@ -151,6 +151,45 @@ public static class UmadActions
         Timing = new() { DamageDelay = 0.62f },
     };
 
+    // 我方：P2 收尾異三角（Owner 11-25）。DamageDelay／AnimationLock 沒有實測，取同段的 1.1／0.6 級距；判定只看位置。
+
+    public static readonly EnemyAction Trine = new(UmadConstants.ActionId.Trine)
+    {
+        Cast = new() { AnimationLock = 1.1f, FaceTarget = false },
+        Effects = [Damage(MagicVulns, Lethal)],
+        Timing = new() { DamageDelay = 0.6f },
+        DeathExplanation = "a Trine vertex",
+    };
+
+    // Retail keeps Kefka facing north through both casts; only the area turns to the glowing wing's side
+    // (left = west, right = east in two FFLogs kills where the party stood west of centre for R).
+    public static readonly EnemyAction WingsOfDestructionLeft = WingsOfDestruction(UmadConstants.ActionId.WingsOfDestructionL, MathF.PI / 2);
+    public static readonly EnemyAction WingsOfDestructionRight = WingsOfDestruction(UmadConstants.ActionId.WingsOfDestructionR, -MathF.PI / 2);
+
+    private static EnemyAction WingsOfDestruction(uint actionId, float side) => new(actionId)
+    {
+        Cast = new() { AnimationLock = 1.1f },
+        Area = new() { Rotation = side },
+        Effects = [Damage(MagicVulns, Lethal)],
+        Timing = new() { DamageDelay = 0.6f },
+        DeathExplanation = "the glowing wing's half",
+    };
+
+    public static readonly EnemyAction WingsOfDestructionBuster = new(UmadConstants.ActionId.WingsOfDestructionBuster)
+    {
+        Cast = new() { AnimationLock = 1.1f, FaceTarget = false },
+        Effects = [Damage(MagicVulns, TankBuster)],
+        Timing = new() { DamageDelay = 0.6f },
+    };
+
+    // Two-player shared tankbuster on Kefka's target.
+    public static readonly EnemyAction UltimateEmbrace = new(UmadConstants.ActionId.UltimateEmbrace)
+    {
+        Cast = new() { AnimationLock = 3.1f },
+        Effects = [Damage(MagicVulns, TankBuster, split: Stack(2))],
+        Timing = new() { DamageDelay = 1.1f },
+    };
+
     // -- P3 Black Hole --
 
     public static readonly EnemyAction ExdeathAutoAttack = new(UmadConstants.ActionId.AutoAttack2)
