@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using AnoMech.Core;
 using AnoMech.Core.Game;
@@ -63,26 +64,32 @@ public sealed class UmadP2TrineScenario : IScenario
         for (var wave = 0; wave < UmadP2Trine.WaveAt.Length; wave++)
         {
             var vertices = state.Trine.WaveVertices(wave);
-            var cells = state.Trine.WaveCells(wave);
             var blastAt = UmadP2Trine.WaveAt[wave];
-            var appearAt = UmadP2Trine.AppearAt(wave);
             var triangles = new List<SimEventObject?>();
-            world.Events.Add(appearAt, () =>
+            // 同一波可能分兩個時刻現身（第三波的中心三角較晚，見 UmadP2Trine.CenterAppearAt）。
+            foreach (var group in state.Trine.WaveCells(wave).GroupBy(c => c.AppearAt))
             {
-                foreach (var (centroid, pointsEast, layoutId) in cells)
-                    triangles.Add(world.SpawnEventObject(new EventObjectSpawnConfig
-                    {
-                        EObjId = pointsEast ? EObjId.TrineEast : EObjId.TrineWest,
-                        LayoutId = layoutId,
-                        EventId = EObjId.PropEventId,
-                        UseSyntheticEntityId = true, // PlayBeat 只對 synthetic id 送
-                        TargetableStatus = 5,
-                        TimelineState = 2,
-                        Placement = new Placement(new Vector3(centroid.X, 0f, centroid.Y), 0f),
-                    }));
-            });
-            world.Events.Add(appearAt + LandDelay, () => triangles.ForEach(t => t?.PlayBeat(EObjAnimLand.State, EObjAnimLand.Bitmask)));
-            world.Events.Add(appearAt + SettleDelay, () => triangles.ForEach(t => t?.PlayBeat(EObjAnimSettle.State, EObjAnimSettle.Bitmask)));
+                var appearAt = group.Key;
+                var cells = group.ToList();
+                var spawned = new List<SimEventObject?>();
+                world.Events.Add(appearAt, () =>
+                {
+                    foreach (var (centroid, pointsEast, layoutId, _) in cells)
+                        spawned.Add(world.SpawnEventObject(new EventObjectSpawnConfig
+                        {
+                            EObjId = pointsEast ? EObjId.TrineEast : EObjId.TrineWest,
+                            LayoutId = layoutId,
+                            EventId = EObjId.PropEventId,
+                            UseSyntheticEntityId = true, // PlayBeat 只對 synthetic id 送
+                            TargetableStatus = 5,
+                            TimelineState = 2,
+                            Placement = new Placement(new Vector3(centroid.X, 0f, centroid.Y), 0f),
+                        }));
+                    triangles.AddRange(spawned);
+                });
+                world.Events.Add(appearAt + LandDelay, () => spawned.ForEach(t => t?.PlayBeat(EObjAnimLand.State, EObjAnimLand.Bitmask)));
+                world.Events.Add(appearAt + SettleDelay, () => spawned.ForEach(t => t?.PlayBeat(EObjAnimSettle.State, EObjAnimSettle.Bitmask)));
+            }
             world.Events.Add(blastAt - BlastBeatLead, () => triangles.ForEach(t => t?.PlayBeat(EObjAnimBlast.State, EObjAnimBlast.Bitmask)));
             world.Events.Add(blastAt, () =>
             {

@@ -38,10 +38,13 @@ public sealed record UmadP2Trine(int[] FirstWave, int SecondWave, int[] LastWave
     public const float WingsCastAt = TrineCastAt + 6.15f;
     public const float WingsResolveAt = WingsCastAt + 4.0f;
     public static readonly float[] WaveAt = [TrineCastAt + 15.86f, TrineCastAt + 17.87f, TrineCastAt + 19.87f];
-    // 實戰錄製：三角依爆炸順序逐波現身，第一波在三角讀條開始後約 4.0 秒，之後每波晚 2 秒；現身 1.3 秒後落地（EObjAnim 00100020），
+    // 實戰錄製：外圈三角依爆炸順序逐波現身，第一波在三角讀條開始後約 4.0 秒，之後每波晚 2 秒；現身 1.3 秒後落地（EObjAnim 00100020），
     // BossMod：落地後 10.7 秒爆。
     public const float FallLead = 10.7f;
     public static float AppearAt(int wave) => TrineCastAt + 4.0f + 2f * wave;
+    // 中心三角實戰跟第三波一起在毀滅之翼讀條中現身；Owner 11-27（D2696 b）要求讀條期間王腳下不顯示三角，
+    // 改在毀滅之翼結算時才出現（比實戰晚約 2.15 秒，爆炸時刻不變）。
+    public const float CenterAppearAt = WingsResolveAt;
     public const float BusterCastAt = TrineCastAt + 16.31f;
     public const float BusterHitAt = TrineCastAt + 20.36f;
     public const float BusterRadius = 7f;
@@ -62,12 +65,12 @@ public sealed record UmadP2Trine(int[] FirstWave, int SecondWave, int[] LastWave
         _ => LastWave.SelectMany(RingVertices).Concat(Vertices(Vector2.Zero, CenterPointsEast)).ToList(),
     };
 
-    // wave 0–2 現身的三角：(中心點, 尖端朝東, LayoutId)；中心永遠在最後一波。
-    public IReadOnlyList<(Vector2 Centroid, bool PointsEast, uint LayoutId)> WaveCells(int wave)
+    // wave 0–2 現身的三角：(中心點, 尖端朝東, LayoutId, 現身時刻)；中心永遠在最後一波，現身時刻見 CenterAppearAt。
+    public IReadOnlyList<(Vector2 Centroid, bool PointsEast, uint LayoutId, float AppearAt)> WaveCells(int wave)
     {
         var ring = wave switch { 0 => FirstWave, 1 => new[] { SecondWave }, _ => LastWave };
-        var cells = ring.Select(i => (Ring[i].Centroid, Ring[i].PointsEast, UmadConstants.EObjId.TrineRingLayoutIds[i])).ToList();
-        if (wave >= 2) cells.Add((Vector2.Zero, CenterPointsEast, UmadConstants.EObjId.TrineCenterLayoutId));
+        var cells = ring.Select(i => (Ring[i].Centroid, Ring[i].PointsEast, UmadConstants.EObjId.TrineRingLayoutIds[i], AppearAt(wave))).ToList();
+        if (wave >= 2) cells.Add((Vector2.Zero, CenterPointsEast, UmadConstants.EObjId.TrineCenterLayoutId, CenterAppearAt));
         return cells;
     }
 
@@ -81,7 +84,7 @@ public sealed record UmadP2Trine(int[] FirstWave, int SecondWave, int[] LastWave
         yield return centroid + new Vector2(-tip * Circumradius / 2f, EdgeLength / 2f);
     }
 
-    // ── 站位規劃（打法：取自兩場通關 log 的實際走位，見 Ai/UmadP2TrineAi） ──
+    // ── 站位規劃（打法：Owner D2686 a，見 Ai/UmadP2TrineAi） ──
 
     // 遠坦站在自己那格中心再往外，確保比站在格中心的全隊遠（死刑打最近與最遠）。
     public const float FarTankRadius = 18.5f;
@@ -92,18 +95,24 @@ public sealed record UmadP2Trine(int[] FirstWave, int SecondWave, int[] LastWave
 
     public sealed record Plan(Vector2 Party, Vector2 FarTank, Vector2 CloseTank);
 
-    // 全隊進「第一波」裡、兩側鄰格最多是最後一波的那一格（攻略：找第一波和最後一波相鄰的地方，第一波爆完走進去）；
-    // 遠坦進另一個離全隊最遠的第一波格；近坦在 Kefka 身邊、朝遠坦那側找最近的安全點。同分取 Ring 索引小的。
+    // 第一波爆完後的三個安全格，從 A（北）起逆時針（北→西→南→東）排：坦克先拿第一格，遠坦走到該格外緣、近坦靠王；
+    // 人群拿剩下格中在南半場、順序最前的一格，南半場沒有就拿剩下的第一格（Owner 11-27）。
     public Plan PlanPositions()
     {
-        var lastNeighbours = FirstWave.ToDictionary(i => i,
-            i => LastWave.Count(j => j == (i + 1) % Ring.Count || j == (i + Ring.Count - 1) % Ring.Count));
-        var partyIndex = FirstWave.OrderByDescending(i => lastNeighbours[i]).ThenBy(i => i).First();
+        var scan = FirstWave.OrderBy(i => CounterClockwiseFromA(Ring[i].Centroid)).ToList();
+        var tankIndex = scan[0];
+        var partyIndex = scan.Skip(1).Where(i => Ring[i].Centroid.Y > 0f).DefaultIfEmpty(scan[1]).First();
         var party = Ring[partyIndex].Centroid;
-        var farIndex = FirstWave.Where(i => i != partyIndex)
-            .OrderByDescending(i => Vector2.Distance(Ring[i].Centroid, party)).ThenBy(i => i).First();
-        var farTank = Vector2.Normalize(Ring[farIndex].Centroid) * FarTankRadius;
+        var farTank = Vector2.Normalize(Ring[tankIndex].Centroid) * FarTankRadius;
         return new Plan(party, farTank, CloseTankSpot(party, farTank));
+    }
+
+    // 由正北往西量的角度（北＝-Y）。外圈每格各占 60° 扇區，北格中心在北偏東約 11°，
+    // 起點往東退 30°，讓 A 所在的北格排第一。
+    private static float CounterClockwiseFromA(Vector2 centroid)
+    {
+        var angle = MathF.Atan2(-centroid.X, -centroid.Y) + MathF.PI / 6f;
+        return angle < 0f ? angle + 2f * MathF.PI : angle;
     }
 
     // 從遠坦方向起左右各 5° 一步（到 ±60°），每個方向由內往外 0.25y 一步（6–11y），取「半徑＋偏角」分數最低的安全點。
